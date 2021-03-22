@@ -2,7 +2,7 @@
 
 把 TypeScript 项目分解为多个 Git 仓库来编写，并提供 TypeScript => JavaScript 的全套构建工具链。
 
-## 拆分的意义
+## 拆分的意义是什么？
 
 为了控制依赖，避免产生所有人依赖所有人的糟糕结果。
 
@@ -19,4 +19,266 @@
 * 主板和插件怎么整合到一起？
 * 顶层的那个项目只起到聚合代码的作用，那是不是可以代码生成出来？
 
-`@rotcare/codegen` 所演示的能力，就是利用编译期的工具，在 TypeScript => JavaScript 的过程中，把拆分的代码文件整合回一个文件。这种整合代码的方式，是在所有插件化技术里，实现代价最低的方案。
+`@rotcare/codegen` 所演示的能力，就是利用编译期的工具，在 TypeScript => JavaScript 的过程中，把拆分的代码文件整合回一个文件。这种整合代码的方式，是在所有限制管控依赖关系的技术里，实现代价最低的方案。
+
+## 主板 + 插件是如何粘合的？
+
+在主板中定义一个 class，把其中的一些 method 用注释标记为 virtual 的。然后在插件的同位置文件中，定义一个同名的 class，写一个同名的 method 用注释标记为 override 的。这样就实现了主板和插件的对应关系。在 TypeScript => JavaScript 的构建过程里，会把 override 的 method 顶替掉 virtual 的 method。
+
+例如在主板的 [Home/Private/SomeCommand.ts](https://github.com/rotcare/demo/blob/main/demos/demo-composite-motherboard/Home/Private/SomeCommand.ts) 中我们定义了
+
+```ts
+export class SomeCommand {
+    public async run() {
+        await this.step1();
+        await this.step2();
+    }
+    /**
+     * @virtual
+     */
+    protected async step1() {
+    }
+    /**
+     * @virtual
+     */
+    protected async step2() {
+    }
+}
+```
+
+我们写了一个插件1，其同位置  [Home/Private/SomeCommand.impl.ts](https://github.com/rotcare/demo/blob/main/demos/demo-composite-plugin1/Home/Private/SomeCommand.impl.ts) 中我们定义了同名的 class：
+
+```ts
+import { SomeCommand as INF } from '@motherboard/Home/Private/SomeCommand';
+
+export class SomeCommand extends INF {
+    /**
+     * @override
+     */
+    protected async step1() {
+        // 演示 error 的 stack trace 能够正确被 source map
+        console.log('step1 provided by plugin1', new Error());
+    }
+}
+```
+
+注意到插件中覆盖主板的文件最好命名为 .impl.ts 的后缀，以清晰的显示这个文件是用来实现主板定义的抽象接口的。同时，为了让 TypeScript 文件在 IDE 中能够有正确的代码提示，`SomeCommand extends INF` 继承了主板定义的 SomeCommand。这个继承关系仅仅是为了让 IDE 能够出正确的代码提示，并不会真正有这么一个继承关系。其中 `from '@motherboad/Home/Private/SomeCommand` 引用了 `@motherboard` 这个别名，其定义于 [tsconfig.json](https://github.com/rotcare/demo/blob/main/demos/demo-composite-plugin1/tsconfig.json) 中：
+
+```json
+{
+    "compilerOptions": {
+        "target": "es2018",
+        "strict": true,
+        "moduleResolution": "node",
+        "experimentalDecorators": true,
+        "module": "CommonJs",
+        "strictPropertyInitialization": false,
+        "jsx": "react",
+        "noEmit": true,
+        "paths": {
+            "@motherboard/*": ["../demo-composite-motherboard/*"]
+        },
+        "baseUrl": "."
+    }
+}
+```
+
+类似于插件1，我们还可以写一个[插件2](https://github.com/rotcare/demo/blob/main/demos/demo-composite-plugin2/Home/Private/SomeCommand.impl.ts)：
+
+```ts
+import { SomeCommand as INF } from '@motherboard/Home/Private/SomeCommand';
+
+export class SomeCommand extends INF {
+    /**
+     * @override
+     */
+    protected async step2() {
+        console.log('step2 provided by plugin2');
+    }
+}
+```
+
+然后可以用过一条命令 `yarn rotcare-show Home/Private/SomeCommand` 得知粘合之后的 JavaScript 代码是什么样子的：
+
+```bash
+cd demos/demo-composite-project
+yarn rotcare-show Home/Private/SomeCommand
+```
+
+注意需要进入 demo-composite-project 执行，要不然 rotcare-show 不知道要粘合哪些插件和主板。输出的 JavaScript 是
+
+```js
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.SomeCommand = void 0;
+
+class SomeCommand {
+  async run() {
+    await this.step1();
+    await this.step2();
+  }
+
+  async step1() {
+    // 演示 error 的 stack trace 能够正确被 source map
+    console.log('step1 provided by plugin1', new Error());
+  }
+
+  async step2() {
+    console.log('step2 provided by plugin2');
+  }
+
+}
+
+exports.SomeCommand = SomeCommand;
+```
+
+可以看到所谓粘合，就是类似文本替换的效果。
+
+## 界面如何粘合？
+
+前面演示了服务端的一个命令的两个步骤，是如何拆分成两个插件来实现。那么如果一个界面上有多个区块，要拆分为多个插件来实现，怎么弄呢？
+
+也是一样的实现方案。所谓界面，就是一个 render 函数。比如我们定义这样的一个 React 组件在主板的 [Home/Ui/HomePage.tsx](https://github.com/rotcare/demo/blob/main/demos/demo-composite-motherboard/Home/Ui/HomePage.tsx)：
+
+```ts
+import * as React from 'react';
+
+export class HomePage {
+    public render() {
+        return (
+            <div>
+                {this.renderLine1()}
+                <hr />
+                {this.renderLine2()}
+                <div>
+                <button
+                    onClick={() => {
+                        fetch('http://localhost:3000/SomeCommand', { method: 'POST' });
+                    }}
+                >
+                    call SomeCommand
+                </button>
+                </div>
+            </div>
+        );
+    }
+    /**
+     * @virtual
+     */
+    protected renderLine1() {
+        return <></>;
+    }
+    /**
+     * @virtual
+     */
+    protected renderLine2() {
+        return <></>;
+    }
+}
+```
+
+这里就是一个标准的 React 函数组件。定义在一个 HomePage class 里，仅仅是为了让插件可以 impl 其中的 renderLine1 和 renderLine2 这两个 method。并不是什么 class component。然后我们定义 renderLine1 的实现[在插件1中](https://github.com/rotcare/demo/blob/main/demos/demo-composite-plugin1/Home/Ui/HomePage.impl.tsx)：
+
+```ts
+import { HomePage as INF } from '@motherboard/Home/Ui/HomePage';
+import * as React from 'react';
+
+export class HomePage extends INF {
+    /**
+     * @override
+     */
+    protected renderLine1() {
+        // 演示 error 的 stack trace 能够正确被 source map
+        console.log(new Error());
+        return <span>line 1 provided by plugin1</span>
+    }
+}
+```
+
+这样就可以了。
+
+## 聚合项目怎么用代码生成来搞？
+
+聚合项目需要把插件和主板整合到一起，并对外提供一个完整的功能入口。比如说，监听 3000 端口，并响应 http 请求。那么，聚合项目里势必是要写路由派发的代码，就需要有人来维护这个聚合项目。但这样的样板代码是枯燥无味的，我们可以用代码生成来解决。比如在 demo-composite-project 中定义 [backend.ts](https://github.com/rotcare/demo/blob/main/demos/demo-composite-project/backend.ts) 文件：
+
+```ts
+import * as http from 'http';
+import { codegen, Model } from '@rotcare/codegen';
+
+// 用代码生成的方式生成路由代码，避免在这里手工 require 每一个后端的 RPC 方法
+const routes = codegen<Record<string, () => void>>((...models: Model[]) => {
+    const lines = [`const routes={}`];
+    for (const model of models) {
+        if (model.qualifiedName.includes('/Private/') || model.qualifiedName.includes('/Public/')) {
+            lines.push(`routes['/${model.tableName}'] = () => new (require('@motherboard/${model.qualifiedName}').${model.tableName})().run()`);
+        }
+    }
+    lines.push('return routes')
+    return lines.join('\n') as any;
+})
+
+new http.Server((req, resp) => {
+    resp.setHeader('Access-Control-Allow-Origin', '*');
+    // CORS 有一个预检
+    if (req.method === 'OPTIONS') {
+        resp.setHeader('Access-Control-Allow-Headers', '*');
+        resp.end('');
+        return;
+    }
+    routes[req.url!]();
+    resp.end();
+    return;
+}).listen(3000);
+```
+
+这里使用了 `@rotcare/codegen` 提供的 `codegen` 函数。这个对 codegen 的调用，就类似于 C/C++ 里的宏。在 TypeScript => JavaScript 的构建过程中，会对 codegen 的回调进行求值，并把求值得到的 JavaScript 源代码粘贴到 codegen 的调用处。我们可以用前面用过的 `yarn rotcare-show backend` 来查看一下代码生成的结果：
+
+```js
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.routes = void 0;
+
+var http = _interopRequireWildcard(require("http"));
+
+function _getRequireWildcardCache() { if (typeof WeakMap !== "function") return null; var cache = new WeakMap(); _getRequireWildcardCache = function () { return cache; }; return cache; }
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } if (obj === null || typeof obj !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
+
+const routes = (() => {
+  const routes = {};
+
+  routes['/SomeCommand'] = () => new (require('@motherboard/Home/Private/SomeCommand').SomeCommand)().run();
+
+  return routes;
+})();
+
+exports.routes = routes;
+new http.Server((req, resp) => {
+  resp.setHeader('Access-Control-Allow-Origin', '*'); // CORS 有一个预检
+
+  if (req.method === 'OPTIONS') {
+    resp.setHeader('Access-Control-Allow-Headers', '*');
+    resp.end('');
+    return;
+  }
+
+  routes[req.url]();
+  resp.end();
+  return;
+}).listen(3000);
+```
+
+其中 `const routes` 就代表了代码生成之后的内容，其余部分的代码可以用 routes 来引用生成的代码。
+
+利用上述的两种机制，我们就可以做到 demo-composite-project 项目是自动生成的，而不需要频繁修改。值得注意的是，上面的例子里，界面用的就是 React，也可以换成 Vue 等任意前端框架。后端代码里用的就是 node.js 的 http，不和任何的 RPC 框架耦合，可以随意使用自己中意的框架。codegen 的机制是在 TypeScript 源代码层面工作的，可以和任意的库，任意的框架进行集成。比如我们可以用 codegen 生成 react-router 的页面路由入口。
+
+## TypeScript => JavaScript，咋弄的？
+
+TODO
+
