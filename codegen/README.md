@@ -143,7 +143,7 @@ exports.SomeCommand = SomeCommand;
 
 也是一样的实现方案。所谓界面，就是一个 render 函数。比如我们定义这样的一个 React 组件在主板的 [Home/Ui/HomePage.tsx](https://github.com/rotcare/demo/blob/main/demos/demo-composite-motherboard/Home/Ui/HomePage.tsx)：
 
-```ts
+```tsx
 import * as React from 'react';
 
 export class HomePage {
@@ -182,7 +182,7 @@ export class HomePage {
 
 这里就是一个标准的 React 函数组件。定义在一个 HomePage class 里，仅仅是为了让插件可以 impl 其中的 renderLine1 和 renderLine2 这两个 method。并不是什么 class component。然后我们定义 renderLine1 的实现[在插件1中](https://github.com/rotcare/demo/blob/main/demos/demo-composite-plugin1/Home/Ui/HomePage.impl.tsx)：
 
-```ts
+```tsx
 import { HomePage as INF } from '@motherboard/Home/Ui/HomePage';
 import * as React from 'react';
 
@@ -202,7 +202,27 @@ export class HomePage extends INF {
 
 ## 聚合项目怎么用代码生成来搞？
 
-聚合项目需要把插件和主板整合到一起，并对外提供一个完整的功能入口。比如说，监听 3000 端口，并响应 http 请求。那么，聚合项目里势必是要写路由派发的代码，就需要有人来维护这个聚合项目。但这样的样板代码是枯燥无味的，我们可以用代码生成来解决。比如在 demo-composite-project 中定义 [backend.ts](https://github.com/rotcare/demo/blob/main/demos/demo-composite-project/backend.ts) 文件：
+聚合项目需要把插件和主板粘合到一起。这个通过定义 demo-composite-project 的 [package.json](https://github.com/rotcare/demo/blob/main/demos/demo-composite-project/package.json) 声明一下，构建时候知道要粘合什么了：
+
+```json
+{
+    "name": "@rotcare/demo-composite-project",
+    "version": "0.1.0",
+    "license": "MIT",
+    "rotcare": {
+        "project": "composite"
+    },
+    "dependencies": {
+        "@rotcare/demo-composite-motherboard": "*",
+        "@rotcare/demo-composite-plugin1": "*",
+        "@rotcare/demo-composite-plugin2": "*"
+    }
+}
+```
+
+因为声明了 rotcare.project 为 composite，所以就知道要把 dependencies 里的 package 都用粘合的方式弄到一起去构建。
+
+除此之外，对外还需要提供一个完整的功能入口。比如说，监听 3000 端口，并响应 http 请求。那么，聚合项目里势必是要写路由派发的代码，就需要有人来维护这个聚合项目。但这样的样板代码是枯燥无味的，我们可以用代码生成来解决。比如在 demo-composite-project 中定义 [backend.ts](https://github.com/rotcare/demo/blob/main/demos/demo-composite-project/backend.ts) 文件：
 
 ```ts
 import * as http from 'http';
@@ -274,11 +294,20 @@ new http.Server((req, resp) => {
 }).listen(3000);
 ```
 
-其中 `const routes` 就代表了代码生成之后的内容，其余部分的代码可以用 routes 来引用生成的代码。
+其中 `const routes` 就代表了代码生成之后的内容，其余部分的代码可以用 routes 来引用生成的代码。在命令行启动 http 服务时，我们使用：
+
+```bash
+node -r @rotcare/register backend.ts
+```
+
+这里的 -r 参数就完成了 TypeScript => JavaScript 的构建工作，用起来就和写 JavaScript 的体验是差不多的。
 
 利用上述的两种机制，我们就可以做到 demo-composite-project 项目是自动生成的，而不需要频繁修改。值得注意的是，上面的例子里，界面用的就是 React，也可以换成 Vue 等任意前端框架。后端代码里用的就是 node.js 的 http，不和任何的 RPC 框架耦合，可以随意使用自己中意的框架。codegen 的机制是在 TypeScript 源代码层面工作的，可以和任意的库，任意的框架进行集成。比如我们可以用 codegen 生成 react-router 的页面路由入口。
 
-## TypeScript => JavaScript，咋弄的？
+## 相关的包
 
-TODO
+* [`@rotcare/codegen`](https://github.com/rotcare/codegen)：提供 codegen 的 API，可以业务代码里引用。会在构建的时候做代码生成，并把生成的代码插入。
+* [`@rotcare/project`](https://github.com/rotcare/project)：提供 TypeScript => JavaScript 的构建工具，在构建脚本中使用。
+* [`@rotcare/register`](https://github.com/rotcare/register)：包装了 `@rotcare/project` 提供的构建能力，和 Node.js 做好了对接，用 `node -r @rotcare/register` 就可以在执行的时候即时完成构建转译。
+* [`@rotcare/project-esbuild`](https://github.com/rotcare/project-esbuild)：包装了 `@rotcare/project` 提供的构建能力，和 esbuild 做好了对接，提供了 esbuildPlugin 这个插件，插入到 esbuild 的构建体系里。
 
