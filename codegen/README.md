@@ -337,7 +337,7 @@ export const EnrollmentFormEditor = codegen(
 
 然后渲染出来
 
-```ts
+```tsx
 import { EnrollmentFormEditor } from '../../WidgetCodegen/Ui/EnrollmentFormEditor';
 import * as React from 'react';
 import { EnrollmentForm } from '../../WidgetCodegen/Ui/EnrollmentForm';
@@ -357,10 +357,11 @@ export function HomePage() {
 
 完整的代码 https://github.com/rotcare/demo/tree/main/demos/demo-codegen-form
 
-可以把一些不太方便抽函数的规律和模式，用抽 generateFormEditor 的方式来实现沉淀。当然，要留心两点：
+可以把一些不太方便抽函数的规律和模式，用抽 generateFormEditor 的方式来实现沉淀。当然，要留心三点：
 
 * 如果能够用简单的抽函数的地方，应该优先用抽函数来实现。
-* 以 UI 一致性规范等共识为主。不要研发自己来倒推规范，UI 设计师和产品经理可能不是这么想的
+* 以 UI 一致性规范等共识为主。不要研发自己来倒推规范，UI 设计师和产品经理可能不是这么想的。
+* 如果一个 Model 要被多个生成器使用，或者用于很多用途。不要把所有的生成器的参数都以 decorator 的形式往 Class 定义上加。这样相当于把函数的参数，改成用全局变量来实现。
 
 比如如果后端有一个 Enrollment 的表，那么是不是可以根据 Enrollment 表来生成 EnrollmentForm 和 EnrollmentFormEditor 呢？可能可以，可能不可以。取决于你的业务需求。
 
