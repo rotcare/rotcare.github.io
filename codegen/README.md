@@ -304,6 +304,66 @@ node -r @rotcare/register backend.ts
 
 利用上述的两种机制，我们就可以做到 demo-composite-project 项目是自动生成的，而不需要频繁修改。值得注意的是，上面的例子里，界面用的就是 React，也可以换成 Vue 等任意前端框架。后端代码里用的就是 node.js 的 http，不和任何的 RPC 框架耦合，可以随意使用自己中意的框架。codegen 的机制是在 TypeScript 源代码层面工作的，可以和任意的库，任意的框架进行集成。比如我们可以用 codegen 生成 react-router 的页面路由入口。
 
+## codegen 的其他用途
+
+codegen 是通用的编译期代码生成，当然可以用来做表单生成之类的事情。比如根据表单的字段定义
+
+```ts
+export class EnrollmentForm {
+    public studentName: string;
+    public studentAge: number;
+    public course: string;
+}
+```
+
+生成这个表单的 React 组件
+
+```ts
+import { codegen, Model } from '@rotcare/codegen';
+import { generateFormEditor } from '@rotcare/demo-codegen-form';
+import { EnrollmentForm } from './EnrollmentForm';
+
+// 渲染一个表单，把用户提交的值绑定到表单对象上
+export const EnrollmentFormEditor = codegen(
+    (enrollment: Model<EnrollmentForm>) => {
+        return generateFormEditor(enrollment, {
+            studentAge: '学生年龄',
+            studentName: '学生姓名',
+            course: '课程',
+        });
+    }
+);
+```
+
+然后渲染出来
+
+```ts
+import { EnrollmentFormEditor } from '../../WidgetCodegen/Ui/EnrollmentFormEditor';
+import * as React from 'react';
+import { EnrollmentForm } from '../../WidgetCodegen/Ui/EnrollmentForm';
+
+export function HomePage() {
+    const [form, _] = React.useState(() => new EnrollmentForm());
+    return (
+        <div>
+            <EnrollmentFormEditor form={form}/>
+            <button onClick={() => {
+                alert(JSON.stringify(form, undefined, '  '));
+            }}>提交</button>
+        </div>
+    );
+}
+```
+
+完整的代码 https://github.com/rotcare/demo/tree/main/demos/demo-codegen-form
+
+可以把一些不太方便抽函数的规律和模式，用抽 generateFormEditor 的方式来实现沉淀。当然，要留心两点：
+
+* 如果能够用简单的抽函数的地方，应该优先用抽函数来实现。
+* 以 UI 一致性规范等共识为主。不要研发自己来倒推规范，UI 设计师和产品经理可能不是这么想的
+
+比如如果后端有一个 Enrollment 的表，那么是不是可以根据 Enrollment 表来生成 EnrollmentForm 和 EnrollmentFormEditor 呢？可能可以，可能不可以。取决于你的业务需求。
+
 ## 相关的包
 
 * [`@rotcare/codegen`](https://github.com/rotcare/codegen)：提供 codegen 的 API，可以业务代码里引用。会在构建的时候做代码生成，并把生成的代码插入。
