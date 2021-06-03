@@ -79,7 +79,7 @@
 
 无论是哪种具体实现技术，都不要实现成如下图所示这样
 
-![orchestration](Orchestration-2.drawio.svg)
+![orchestration](Orchestration.drawio.svg)
 
 在插件之上**不应该有**一个额外的包（模块）包含业务逻辑了。插件对主板的插入应该是一个 AutoWire，纯机械不含业务的过程。业务编排这样的概念一定不要出现在依赖关系的最顶层。我们已经在最底下的主板实现了所谓的“业务编排”了。
 
