@@ -51,7 +51,7 @@
 
 当我们把代码拆分成多个包（或者叫模块），并使得这些包（模块）形成特定的依赖关系，就可以通过编译器检查控制什么代码必须写在什么地方，从而不需要靠人去检查。这个依赖关系如下图所示
 
-![motherboard](docs/Part1/InformationHiding/Motherboard-2.drawio.svg)
+![motherboard](Motherboard-2.drawio.svg)
 
 * 插件：尽可能完整的实现一个独立的功能，比如面向最终用户的完整的页面
 * 主板：当插件与插件之间有功能上的集成需要的时候，通过绕路主板来实现，而不能直接在插件和插件之间有引用关系
@@ -79,7 +79,7 @@
 
 无论是哪种具体实现技术，都不要实现成如下图所示这样
 
-![orchestration](docs/Part1/InformationHiding/Orchestration-2.drawio.svg)
+![orchestration](Orchestration-2.drawio.svg)
 
 在插件之上**不应该有**一个额外的包（模块）包含业务逻辑了。插件对主板的插入应该是一个 AutoWire，纯机械不含业务的过程。业务编排这样的概念一定不要出现在依赖关系的最顶层。我们已经在最底下的主板实现了所谓的“业务编排”了。
 
@@ -91,7 +91,7 @@ SaaS 可以把自己的功能拆解到多个插件来实现。但是经常有“
 
 解决办法就是我们希望有一个人来“收口”，然后由这个人来保证收口之后的代码没有重复的实现，建立合理的抽象。如下图所示
 
-![monopoly](docs/Part1/Encapsulation.drawio.svg)
+![monopoly](Encapsulation.drawio.svg)
 
 所谓“收口”，就是要阻止上图中这样的绕过“这层抽象”，去访问“底层API”的行为。比如说，所有的编程语言都提供了 Http 调用的能力。但是我们希望封装一个 Http Restful API 的调用 SDK。在这个 SDK 里我们统一实现重试，统一实现熔断摘除故障节点这样的一些功能。避免每个调用 Restful 接口的地方都重复地 try catch，重复地写不一致地重试逻辑。那就需要有一个人来封装这样的库，同时强制所有“应该使用这个库的地方”都使用了这个库。
 
